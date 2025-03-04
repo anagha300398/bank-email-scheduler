@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:sockets="http://www.mulesoft.org/schema/mule/sockets" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:snowflake="http://www.mulesoft.org/schema/mule/snowflake" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/snowflake http://www.mulesoft.org/schema/mule/snowflake/current/mule-snowflake.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/sockets http://www.mulesoft.org/schema/mule/sockets/current/mule-sockets.xsd">
+	<snowflake:snowflake-config name="Snowflake_Config" doc:name="Snowflake Config" doc:id="9be44f2b-b82c-40da-b865-b1b337278f11" >	
+		<snowflake:snowflake-connection accountName="lr62879.central-india.azure" warehouse="COMPUTE_WH" database="VITECH" schema="BFS" user="Anagha30" password="Rashmi@25junea" role="ACCOUNTADMIN"/>
+	</snowflake:snowflake-config>
+	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="b6def596-bcf3-4091-8353-e7cb7322183f" >
+    <email:smtp-connection host="${Email.config.host}" port="${Email.config.port}" user="${Email.config.user}" password="${Email.config.password}" >
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	<configuration-properties doc:name="Configuration properties" doc:id="97878b26-8ea0-4085-807e-3534bedb9637" file="dev.yaml" />
+	<flow name="bank-email-schedulerFlow" doc:id="d362515a-60e8-4cea-9d05-6641f95912aa" >
+		<scheduler doc:name="Scheduler" doc:id="36805067-e7af-4272-b16a-4fd6f1cfc23b" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="5" timeUnit="MINUTES" />
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO" doc:name="Logger" doc:id="11b2a5b6-7603-4557-adc2-f8cf34ad3746" message="-------------------Scheduler Process Started--------------------" />
+		<snowflake:select doc:id="af3a5e5e-86c3-492a-ad10-1201feb98f01" config-ref="Snowflake_Config" doc:name="Select" >
+			<snowflake:sql ><![CDATA[select * from Bank_Transactions ;]]></snowflake:sql>
+		</snowflake:select>
+		<foreach doc:name="For Each" doc:id="4176f9a9-72e3-4057-979a-d1c8b4a1f7f5" >
+			<ee:transform doc:name="Transform Message" doc:id="cad5c34b-f7da-4eae-bb70-3cf4258f1411" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<logger level="INFO" doc:name="Logger" doc:id="0fb3201a-579b-4e08-926e-370987c0222e" message="#[payload]" />
+			<email:send doc:id="edb8ead1-2dd2-4cb2-9acb-382bc1ba4a16" config-ref="Email_SMTP" fromAddress="$.{Email.config.user}" subject='#["Todays Total Balance for bank "++ payload.BANKNAME as String]' doc:name="Send" >
+				<email:to-addresses >
+					<email:to-address value="#[payload.MAILID]" />
+				</email:to-addresses>
+				<email:body contentType="text/plain" contentTransferEncoding="7BIT">
+					<email:content ><![CDATA[#["Your total balance is: " ++ payload.TOTALBALANCE as String]]]></email:content>
+				</email:body>
+			</email:send>
+			<logger level="INFO" doc:name="Logger1" doc:id="74b52fa7-430d-4d64-8e5a-6dd0b235c484" message="---------- EMAIL Sent ------------" />
+		</foreach>
+	</flow>
+</mule>
